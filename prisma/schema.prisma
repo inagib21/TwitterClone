@@ -15,15 +15,17 @@ model Tweet {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  likes Like[]
 
   @@index([userId])
+  @@unique([createdAt, id])
 }
 
 model Like {
   userId  String
   tweetId String
   user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tweet   Tweet @relation(fields: [tweetId], references: [id], onDelete: Cascade)
+  Tweet   Tweet @relation(fields: [tweetId], references: [id], onDelete: Cascade)
 
   @@id([userId, tweetId])
   @@index([userId])
@@ -69,8 +71,8 @@ model User {
   sessions      Session[]
   tweets        Tweet[]
   likes         Like[]
-  followers     User[] @relation(name: "Followers", fields: [followersId], references: [id])
-  follows       User[] @relation(name: "Followers", fields: [followsId], references: [id])
+  followers     User[] @relation(name: "Followers")
+  follows       User[] @relation(name: "Followers")
 
   @@index([email])
 }

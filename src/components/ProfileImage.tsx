@@ -1,4 +1,5 @@
 import Image from 'next/image'; // Make sure to import the Image component
+import { VscAccount } from 'react-icons/vsc';
 
 type ProfileImageProps = {
     src?: string | null;
@@ -8,7 +9,7 @@ type ProfileImageProps = {
 export function ProfileImage({ src, className = "" }: ProfileImageProps) {
     return (
         <div className={`relative h-12 w-12 overflow-hidden rounded-full ${className}`}>
-            {src == null ? null : (
+            {src ==null ? ( <VscAccount className="h-full w-full"/> )  : (
                 <Image src={src} alt="Profile Image" quality={100} fill />
             )}
         </div>
