@@ -22,7 +22,7 @@ const ProfilePage: NextPage<InferGetServerSidePropsType<typeof getStaticProps>> 
   
     // Fetch user's tweets using trpc query
     const tweets = api.tweet.infiniteProfileFeed.useInfiniteQuery({
-      userId: id,
+      userId: id,}, {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
     });
     const trpcUtils = api.useContext()
