@@ -1,94 +1,96 @@
 import { useSession } from "next-auth/react";
+
+import { api } from " /utils/api";
 import { Button } from "./Button";
 import { ProfileImage } from "./ProfileImage";
 import { FormEvent, useCallback, useLayoutEffect, useRef, useState } from "react";
-import { text } from "stream/consumers";
-import { api } from " /utils/api";
 
-function updateTextAreaSize(textArea?: HTMLTextAreaElement ){
-    if (textArea == null) return
-    textArea.style.height = "0"
-    textArea.style.height = `${textArea.scrollHeight}px`
+function updateTextAreaSize(textArea?: HTMLTextAreaElement) {
+  if (textArea == null) return;
+  textArea.style.height = "0";
+  textArea.style.height = `${textArea.scrollHeight}px`;
 }
 
+export function NewTweetForm() {
+  const session = useSession();
+  if (session.status !== "authenticated") return null;
 
-export function NewTweetForm(){
-    const session = useSession();
-    if (session.status !== "authenticated") return;
-    return (<Form/>);
+  return <Form />;
 }
 
+function Form() {
+  const session = useSession();
+  const [inputValue, setInputValue] = useState("");
+  const textAreaRef = useRef<HTMLTextAreaElement>();
+  const inputRef = useCallback((textArea: HTMLTextAreaElement) => {
+    updateTextAreaSize(textArea);
+    textAreaRef.current = textArea;
+  }, []);
+  const trpcUtils = api.useContext();
 
+  useLayoutEffect(() => {
+    updateTextAreaSize(textAreaRef.current);
+  }, [inputValue]);
 
-function Form(){
-    const session = useSession();
-    const [inputValue, setInputValue] = useState("");
-    const textAreaRef = useRef<HTMLTextAreaElement>();
-   const inputRef = useCallback((textArea: HTMLTextAreaElement) =>{
-        updateTextAreaSize(textArea);
-        textAreaRef.current = textArea
-    }, []);
-    const trpcUtils = api.useContext() 
+  const createTweet = api.tweet.create.useMutation({
+    onSuccess: (newTweet) => {
+      setInputValue("");
 
-    useLayoutEffect(() =>{
-        updateTextAreaSize(textAreaRef.current)
-    }, [inputValue]);
+      if (session.status !== "authenticated") return;
 
-    const createTweet = api.tweet.create.useMutation({ 
-    onSuccess: newTweet =>{
-        setInputValue("");
+      trpcUtils.tweet.infiniteFeed.setInfiniteData({}, (oldData) => {
+        if (oldData == null || oldData.pages[0] == null) return;
 
-        if (session.status !== "authenticated") return;
+        const newCacheTweet = {
+          ...newTweet,
+          likeCount: 0,
+          likedByMe: false,
+          user: {
+            id: session.data.user.id,
+            name: session.data.user.name || null,
+            image: session.data.user.image || null,
+          },
+        };
 
-        trpcUtils.tweet.infiniteFeed.setInfiniteData({}, (oldData) =>{ 
-            if (oldData == null || oldData.pages[0] == null) return;
+        return {
+          ...oldData,
+          pages: [
+            {
+              ...oldData.pages[0],
+              tweets: [newCacheTweet, ...oldData.pages[0].tweets],
+            },
+            ...oldData.pages.slice(1),
+          ],
+        };
+      });
+    },
+  });
 
-            const newCacheTweet = {
-                ...newTweet,
-                likeCount: 0,
-                likedByMe: false,
-                user: {
-                    id: session.data?.user.id,
-                    name: session.data.user.name || null,
-                    image: session.data.user.image  || null,
-                }
-            }
+  if (session.status !== "authenticated") return null;
 
-            return {
-                ...oldData,
-                page: [
-                    {
-                        ...oldData.pages[0],
-                        tweets: [newCacheTweet, ...oldData.pages[0].tweets]
-                    },
-                    ...oldData.pages.slice(1),
-                ]
-            }
-        })
-    },  
-});
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
 
-    if (session.status !== "authenticated") return null;
+    createTweet.mutate({ content: inputValue });
+  }
 
-    function handleSubmit(e: FormEvent){
-        e.preventDefault()
-        
-        createTweet.mutate({text: inputValue});
-    }
-
-    return (<form onSubmit={handleSubmit} className="flex flex-col gap-2 border-b px-4 py-2"> 
-        <div className="flex gap-4">
-             <ProfileImage src= {session.data.user.image} /> 
-          <textarea 
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-2 border-b px-4 py-2"
+    >
+      <div className="flex gap-4">
+        <ProfileImage src={session.data.user.image} />
+        <textarea
           ref={inputRef}
           style={{ height: 0 }}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          className="flex-grow resize-none
-          overflow-hidden p-4 text-lg outline-none"
-          placeholder="What's happening?"/>  
-        </div>
-        <Button className="self-end"> Tweet</Button>
-    </form>);
+          className="flex-grow resize-none overflow-hidden p-4 text-lg outline-none"
+          placeholder="What's happening?"
+        />
+      </div>
+      <Button className="self-end">Tweet</Button>
+    </form>
+  );
 }
-

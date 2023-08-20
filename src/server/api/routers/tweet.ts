@@ -1,82 +1,68 @@
-// Import necessary modules
-import { z } from "zod";
-import {
-  createTRPCContext,
-  createTRPCRouter,
-  protectedProcedure,
-  publicProcedure,
-} from "../trpc";
 import { Prisma } from "@prisma/client";
 import { inferAsyncReturnType } from "@trpc/server";
+import { z } from "zod";
+import { createTRPCContext, createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
-// Create a tweetRouter using createTRPCRouter
+
+
 export const tweetRouter = createTRPCRouter({
-  // Define the infiniteProfileFeed query
   infiniteProfileFeed: publicProcedure
     .input(
       z.object({
-        userId: z.string(), // Define the input schema with userId, limit, and cursor
+        userId: z.string(),
         limit: z.number().optional(),
-        cursor: z.object({ id: z.number(), createdAt: z.date() }).optional(),
+        cursor: z.object({ id: z.string(), createdAt: z.date() }).optional(),
       })
     )
     .query(async ({ input: { limit = 10, userId, cursor }, ctx }) => {
-      const currentUserId = ctx.session?.user.id; // Get the current user's ID from the session
       return await getInfiniteTweets({
         limit,
         ctx,
         cursor,
-        whereClause: { userId }, // Use the provided userId for filtering
+        whereClause: { userId },
       });
     }),
-
-  // Define the infiniteFeed query
   infiniteFeed: publicProcedure
     .input(
       z.object({
         onlyFollowing: z.boolean().optional(),
         limit: z.number().optional(),
-        cursor: z.object({ id: z.number(), createdAt: z.date() }).optional(),
+        cursor: z.object({ id: z.string(), createdAt: z.date() }).optional(),
       })
     )
-    .query(async ({ input: { limit = 10, onlyFollowing, cursor }, ctx }) => {
-      const currentUserId = ctx.session?.user.id; // Get the current user's ID from the session
-      return await getInfiniteTweets({
-        limit,
-        ctx,
-        cursor,
-        whereClause: // Use filtering based on onlyFollowing and currentUserId
-          currentUserId == null || !onlyFollowing
-            ? undefined
-            : {
-                user: {
-                  followers: { some: { id: currentUserId } },
+    .query(
+      async ({ input: { limit = 10, onlyFollowing = false, cursor }, ctx }) => {
+        const currentUserId = ctx.session?.user.id;
+        return await getInfiniteTweets({
+          limit,
+          ctx,
+          cursor,
+          whereClause:
+            currentUserId == null || !onlyFollowing
+              ? undefined
+              : {
+                  user: {
+                    followers: { some: { id: currentUserId } },
+                  },
                 },
-              },
-      });
-    }),
-
-  // Define the create mutation
+        });
+      }
+    ),
   create: protectedProcedure
-    .input(z.object({ text: z.string() }))
-    .mutation(async ({ input: { text }, ctx }) => {
+    .input(z.object({ content: z.string() }))
+    .mutation(async ({ input: { content }, ctx }) => {
       const tweet = await ctx.prisma.tweet.create({
-        data: {
-          content: text,
-          userId: ctx.session.user.id, // Use the current user's ID from the session
-        },
+        data: { content, userId: ctx.session.user.id },
       });
 
-      void ctx.revalidateSSG?.(`profiles/${ctx.session.user.id}`)
+      void ctx.revalidateSSG?.(`/profiles/${ctx.session.user.id}`);
 
       return tweet;
     }),
-
-  // Define the toggleLike mutation
   toggleLike: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input: { id }, ctx }) => {
-      const data = { tweetId: id, userId: ctx.session.user.id }; // Use the current user's ID from the session
+      const data = { tweetId: id, userId: ctx.session.user.id };
 
       const existingLike = await ctx.prisma.like.findUnique({
         where: { userId_tweetId: data },
@@ -92,7 +78,6 @@ export const tweetRouter = createTRPCRouter({
     }),
 });
 
-// Define the getInfiniteTweets function
 async function getInfiniteTweets({
   whereClause,
   ctx,
@@ -104,21 +89,20 @@ async function getInfiniteTweets({
   cursor: { id: string; createdAt: Date } | undefined;
   ctx: inferAsyncReturnType<typeof createTRPCContext>;
 }) {
-  const currentUserId = ctx.session?.user.id; // Get the current user's ID from the session
+  const currentUserId = ctx.session?.user.id;
 
-  // Fetch tweets using Prisma
   const data = await ctx.prisma.tweet.findMany({
     take: limit + 1,
-    cursor: cursor
-      ? { createdAt: cursor.createdAt, id: cursor.id }
-      : undefined,
+    cursor: cursor ? { createdAt_id: cursor } : undefined,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     where: whereClause,
     select: {
       id: true,
       content: true,
-      likes: currentUserId == null ? false : { where: { userId: currentUserId } },
+      createdAt: true,
       _count: { select: { likes: true } },
+      likes:
+        currentUserId == null ? false : { where: { userId: currentUserId } },
       user: {
         select: { name: true, id: true, image: true },
       },
@@ -133,7 +117,6 @@ async function getInfiniteTweets({
     }
   }
 
-  // Return formatted tweets and nextCursor
   return {
     tweets: data.map((tweet) => {
       return {
