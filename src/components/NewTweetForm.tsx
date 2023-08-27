@@ -1,9 +1,14 @@
 import { useSession } from "next-auth/react";
-
+import {
+  FormEvent,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { api } from " /utils/api";
 import { Button } from "./Button";
 import { ProfileImage } from "./ProfileImage";
-import { FormEvent, useCallback, useLayoutEffect, useRef, useState } from "react";
 
 function updateTextAreaSize(textArea?: HTMLTextAreaElement) {
   if (textArea == null) return;
